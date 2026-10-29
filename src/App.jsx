@@ -17,6 +17,37 @@ import { getRoute } from './routes.js'
 
 const STORAGE_KEY = 'taskflow.tasks.v1'
 
+function Icon({ name, size = 18 }) {
+  const paths = {
+    dashboard: <><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="5" rx="1.5" /><rect x="13" y="10" width="8" height="11" rx="1.5" /><rect x="3" y="13" width="8" height="8" rx="1.5" /></>,
+    tasks: <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
+    analytics: <><path d="M4 19V5M4 19h16" /><path d="m7 15 4-4 3 2 5-6" /></>,
+    progress: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    completed: <><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" /></>,
+    plus: <><path d="M12 5v14M5 12h14" /></>,
+    menu: <><path d="M4 7h16M4 12h16M4 17h16" /></>,
+    search: <><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4 4" /></>,
+    close: <><path d="m6 6 12 12M18 6 6 18" /></>,
+    filter: <><path d="M4 7h16M7 12h10M10 17h4" /></>,
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {paths[name]}
+    </svg>
+  )
+}
+
 function loadWorkspace() {
   try {
     const savedTasks = window.localStorage.getItem(STORAGE_KEY)
@@ -55,6 +86,11 @@ export default function App() {
   const [workspace] = useState(loadWorkspace)
   const [tasks, setTasks] = useState(workspace.tasks)
   const [route, setRoute] = useState(() => getRoute(window.location.pathname))
+  const [activeSection, setActiveSection] = useState(
+    () => getRoute(window.location.pathname) === 'analytics' ? 'analytics' : 'dashboard',
+  )
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [pendingTaskAction, setPendingTaskAction] = useState(null)
   const [hasTaskChanges, setHasTaskChanges] = useState(false)
   const [filter, setFilter] = useState('All')
   const [query, setQuery] = useState('')
@@ -68,7 +104,10 @@ export default function App() {
 
   useEffect(() => {
     function syncRoute() {
-      setRoute(getRoute(window.location.pathname))
+      const nextRoute = getRoute(window.location.pathname)
+      setRoute(nextRoute)
+      setActiveSection(nextRoute === 'analytics' ? 'analytics' : 'dashboard')
+      setIsSidebarOpen(false)
     }
 
     window.addEventListener('popstate', syncRoute)
@@ -76,12 +115,40 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (!isSidebarOpen) return undefined
+
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setIsSidebarOpen(false)
+    }
+
+    document.getElementById('workspace-sidebar')?.querySelector('button')?.focus()
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [isSidebarOpen])
+
+  useEffect(() => {
+    if (route !== 'app' || !pendingTaskAction) return undefined
+
+    const frame = window.requestAnimationFrame(() => {
+      const taskPanel = document.getElementById('task-panel')
+      if (pendingTaskAction === 'focus') document.getElementById('new-task')?.focus()
+      taskPanel?.scrollIntoView({
+        behavior: 'smooth',
+        block: pendingTaskAction === 'focus' ? 'center' : 'start',
+      })
+      setPendingTaskAction(null)
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [pendingTaskAction, route])
+
+  useEffect(() => {
     document.title = route === 'landing'
       ? 'TaskFlow — Make room for meaningful progress'
       : route === 'analytics'
         ? 'Analytics — TaskFlow'
-        : 'My tasks — TaskFlow'
-  }, [route])
+        : `${activeSection === 'tasks' ? 'All tasks' : 'Dashboard'} — TaskFlow`
+  }, [activeSection, route])
 
   useEffect(() => {
     if (!hasTaskChanges) return
@@ -101,13 +168,28 @@ export default function App() {
   const stats = getTaskStats(tasks)
   const viewLabel = route === 'analytics'
     ? 'Analytics'
-    : filter === 'All' ? 'My tasks' : filter
+    : activeSection === 'tasks' ? 'All tasks' : filter === 'All' ? 'Dashboard' : filter
 
-  function navigateTo(path) {
+  function navigateTo(path, section) {
     if (window.location.pathname !== path) {
       window.history.pushState({}, '', path)
     }
-    setRoute(getRoute())
+    const nextRoute = getRoute(path)
+    setRoute(nextRoute)
+    setActiveSection(section ?? (nextRoute === 'analytics' ? 'analytics' : 'dashboard'))
+    setIsSidebarOpen(false)
+  }
+
+  function focusTaskCreation() {
+    setFilter('All')
+    setPendingTaskAction('focus')
+    navigateTo('/app', 'dashboard')
+  }
+
+  function openAllTasks() {
+    setFilter('All')
+    setPendingTaskAction('scroll')
+    navigateTo('/app', 'tasks')
   }
 
   function updateTasks(updater) {
@@ -159,6 +241,8 @@ export default function App() {
   }
 
   function removeTask(task) {
+    if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return
+
     updateTasks(current => deleteTask(current, task.id))
     setActionMessage(`Deleted "${task.title}".`)
     if (editingTaskId === task.id) setEditingTaskId(null)
@@ -169,7 +253,7 @@ export default function App() {
       <LandingPage
         tasks={tasks}
         stats={stats}
-        onOpenApp={() => navigateTo('/app')}
+        onOpenApp={() => navigateTo('/app', 'dashboard')}
         onOpenAnalytics={() => navigateTo('/analytics')}
       />
     )
@@ -177,7 +261,15 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <aside className="sidebar">
+      {isSidebarOpen && (
+        <button
+          className="sidebar-backdrop"
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+      <aside className={`sidebar${isSidebarOpen ? ' sidebar-open' : ''}`} id="workspace-sidebar">
         <button className="brand" type="button" onClick={() => navigateTo('/')} aria-label="TaskFlow home">
           <img src="/taskflow-logo-light.svg" alt="" width="188" height="38" />
         </button>
@@ -185,18 +277,44 @@ export default function App() {
         <p className="nav-label">WORKSPACE</p>
         <nav className="workspace-nav" aria-label="Task views">
           <button
+            className={`nav-item${route === 'app' && activeSection === 'dashboard' ? ' active' : ''}`}
+            type="button"
+            onClick={() => {
+              setFilter('All')
+              navigateTo('/app', 'dashboard')
+            }}
+            aria-current={route === 'app' && activeSection === 'dashboard' ? 'page' : undefined}
+          >
+            <span className="nav-icon"><Icon name="dashboard" /></span>
+            <span>Dashboard</span>
+          </button>
+          <button
+            className={`nav-item${route === 'app' && activeSection === 'tasks' ? ' active' : ''}`}
+            type="button"
+            onClick={openAllTasks}
+            aria-current={route === 'app' && activeSection === 'tasks' ? 'page' : undefined}
+          >
+            <span className="nav-icon"><Icon name="tasks" /></span>
+            <span>All tasks</span>
+            <span className="nav-count">{stats.total}</span>
+          </button>
+          <button
             className={`nav-item${route === 'analytics' ? ' active' : ''}`}
             type="button"
-            onClick={() => navigateTo('/analytics')}
+            onClick={() => navigateTo('/analytics', 'analytics')}
             aria-current={route === 'analytics' ? 'page' : undefined}
           >
-            <span className="nav-icon" aria-hidden="true">▥</span>
+            <span className="nav-icon"><Icon name="analytics" /></span>
             <span>Analytics</span>
           </button>
+        </nav>
+
+        <p className="nav-label status-nav-label">TASK STATUS</p>
+        <nav className="workspace-nav status-nav" aria-label="Filter by task status">
           {[
-            { label: 'My tasks', value: 'All', icon: '▦' },
-            { label: 'In progress', value: 'In Progress', icon: '◷' },
-            { label: 'Completed', value: 'Completed', icon: '✓' },
+            { label: 'Pending', value: 'Pending', icon: 'filter' },
+            { label: 'In progress', value: 'In Progress', icon: 'progress' },
+            { label: 'Completed', value: 'Completed', icon: 'completed' },
           ].map(item => (
             <button
               className={`nav-item${route === 'app' && filter === item.value ? ' active' : ''}`}
@@ -204,16 +322,20 @@ export default function App() {
               key={item.value}
               onClick={() => {
                 setFilter(item.value)
-                navigateTo('/app')
+                navigateTo('/app', 'tasks')
               }}
               aria-current={route === 'app' && filter === item.value ? 'page' : undefined}
             >
-              <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+              <span className="nav-icon"><Icon name={item.icon} /></span>
               <span>{item.label}</span>
-              {item.value === 'All' && <span className="nav-count">{stats.total}</span>}
             </button>
           ))}
         </nav>
+
+        <button className="sidebar-create-button" type="button" onClick={focusTaskCreation}>
+          <Icon name="plus" size={17} />
+          <span>Create task</span>
+        </button>
 
         <div className="sidebar-bottom">
           <span className="sidebar-status" aria-hidden="true" />
@@ -224,7 +346,53 @@ export default function App() {
 
       <section className="main-content">
         <header className="topbar">
-          <p><span>Workspace</span><span className="breadcrumb-separator">/</span> {viewLabel}</p>
+          <div className="topbar-title">
+            <button
+              className="mobile-menu-button"
+              type="button"
+              aria-label={isSidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={isSidebarOpen}
+              aria-controls="workspace-sidebar"
+              onClick={() => setIsSidebarOpen(open => !open)}
+            >
+              <Icon name={isSidebarOpen ? 'close' : 'menu'} />
+            </button>
+            <div>
+              <p className="topbar-breadcrumb"><span>Workspace</span><span className="breadcrumb-separator">/</span> {viewLabel}</p>
+              <h1 className="topbar-heading">{route === 'analytics' ? 'Analytics' : activeSection === 'tasks' ? 'All tasks' : 'Dashboard'}</h1>
+            </div>
+          </div>
+          <div className="topbar-actions">
+            {route === 'app' && (
+              <div className="search-wrap topbar-search">
+                <Icon name="search" size={18} />
+                <label className="visually-hidden" htmlFor="task-search">Search tasks</label>
+                <input
+                  id="task-search"
+                  type="search"
+                  value={query}
+                  onChange={event => setQuery(event.target.value)}
+                  placeholder="Search your tasks"
+                />
+                {query && (
+                  <button
+                    className="search-clear"
+                    type="button"
+                    aria-label="Clear task search"
+                    onClick={() => setQuery('')}
+                  >
+                    <Icon name="close" size={15} />
+                  </button>
+                )}
+              </div>
+            )}
+            {route === 'app' && (
+              <button className="primary-button topbar-create-button" type="button" onClick={focusTaskCreation}>
+                <Icon name="plus" size={17} />
+                <span>Create task</span>
+              </button>
+            )}
+          </div>
           <div className="profile" aria-label="TaskFlow workspace">
             <span className="profile-avatar" aria-hidden="true">TF</span>
             <span className="profile-name">My workspace</span>
@@ -238,37 +406,40 @@ export default function App() {
           <section className="welcome">
             <div>
               <p className="eyebrow">YOUR WORKSPACE</p>
-              <h1>Make progress, every day.</h1>
-              <p className="subtitle">A clear view of what matters, and what to do next.</p>
+              <h2 className="welcome-heading">{activeSection === 'tasks' ? 'Everything on your list.' : 'Make progress, every day.'}</h2>
+              <p className="subtitle">{activeSection === 'tasks' ? 'Find a task, update its status, and keep moving.' : 'A clear view of what matters, and what to do next.'}</p>
             </div>
-            <div className="workspace-chip"><span aria-hidden="true">●</span> Local workspace</div>
+            <div className="workspace-chip"><span aria-hidden="true" /> Local workspace</div>
           </section>
 
           {storageMessage && <p className="storage-message" role="status">{storageMessage}</p>}
 
           <section className="stats" aria-label="Task statistics">
             <article className="stat-card">
-              <span className="stat-label">Total tasks</span>
+              <div className="stat-card-top"><span className="stat-icon total-icon"><Icon name="tasks" /></span><span className="stat-label">Total tasks</span></div>
               <strong>{stats.total}</strong>
               <small>Across your workspace</small>
             </article>
             <article className="stat-card">
-              <span className="stat-label">To do</span>
+              <div className="stat-card-top"><span className="stat-icon pending-icon"><Icon name="filter" /></span><span className="stat-label">Pending</span></div>
               <strong>{stats.pending}</strong>
               <small>Ready when you are</small>
             </article>
             <article className="stat-card">
-              <span className="stat-label">In progress</span>
+              <div className="stat-card-top"><span className="stat-icon progress-icon"><Icon name="progress" /></span><span className="stat-label">In progress</span></div>
               <strong>{stats.inProgress}</strong>
               <small>Moving forward</small>
             </article>
             <article className="stat-card">
-              <span className="stat-label">Completed</span>
+              <div className="stat-card-top"><span className="stat-icon completed-icon"><Icon name="completed" /></span><span className="stat-label">Completed</span></div>
               <strong>{stats.completed}</strong>
               <small>Work you’ve finished</small>
             </article>
-            <article className="stat-card progress-stat">
-              <div className="progress-label"><span className="stat-label">Completion</span><strong>{stats.completion}%</strong></div>
+          </section>
+
+          <section className="task-panel" id="task-panel" aria-labelledby="task-heading">
+            <div className="completion-summary">
+              <div className="completion-copy"><span>Overall completion</span><strong>{stats.completion}%</strong></div>
               <div
                 className="progress-track"
                 role="progressbar"
@@ -279,62 +450,70 @@ export default function App() {
               >
                 <span style={{ width: `${stats.completion}%` }} />
               </div>
-              <small>Overall progress</small>
-            </article>
-          </section>
-
-          <section className="task-panel" aria-labelledby="task-heading">
+            </div>
             <div className="panel-heading">
               <div>
-                <h2 id="task-heading">Project tasks</h2>
+                <p className="eyebrow">TASK OVERVIEW</p>
+                <h2 id="task-heading">{activeSection === 'tasks' ? 'All tasks' : 'Your tasks'}</h2>
                 <p>Plan your next step and keep work moving.</p>
               </div>
               <span className="task-count">{visibleTasks.length} {visibleTasks.length === 1 ? 'task' : 'tasks'}</span>
             </div>
 
-            <form className="add-form" onSubmit={addTask} noValidate>
-              <div className="add-input-wrap">
-                <label className="visually-hidden" htmlFor="new-task">New task title</label>
-                <input
-                  id="new-task"
-                  value={newTask}
-                  onChange={event => {
-                    setNewTask(event.target.value)
-                    if (validationMessage) setValidationMessage('')
-                  }}
-                  placeholder="What needs to get done?"
-                  aria-invalid={Boolean(validationMessage)}
-                  aria-describedby={validationMessage ? 'task-validation' : undefined}
-                />
-                {validationMessage && <span className="validation-message" id="task-validation" role="alert">{validationMessage}</span>}
-              </div>
-              <button className="primary-button" type="submit"><span aria-hidden="true">+</span> Add task</button>
-            </form>
-
             <div className="task-tools">
-              <label className="search-wrap">
-                <span className="search-icon" aria-hidden="true">⌕</span>
-                <span className="visually-hidden">Search tasks</span>
-                <input
-                  type="search"
-                  value={query}
-                  onChange={event => setQuery(event.target.value)}
-                  placeholder="Search tasks..."
-                  aria-label="Search tasks"
-                />
-              </label>
-              <div className="filters" aria-label="Filter tasks by status">
-                {TASK_FILTERS.map(item => (
+              <form className="add-form" onSubmit={addTask} noValidate aria-label="Create a task">
+                <div className="add-input-wrap">
+                  <label htmlFor="new-task">Create a task</label>
+                  <input
+                    id="new-task"
+                    value={newTask}
+                    onChange={event => {
+                      setNewTask(event.target.value)
+                      if (validationMessage) setValidationMessage('')
+                    }}
+                    placeholder="What needs to get done?"
+                    aria-invalid={Boolean(validationMessage)}
+                    aria-describedby={validationMessage ? 'task-validation' : undefined}
+                  />
+                  {validationMessage && <span className="validation-message" id="task-validation" role="alert">{validationMessage}</span>}
+                </div>
+                <div className="add-form-actions">
                   <button
-                    key={item}
+                    className="secondary-button"
                     type="button"
-                    className={filter === item ? 'filter active-filter' : 'filter'}
-                    aria-pressed={filter === item}
-                    onClick={() => setFilter(item)}
+                    onClick={() => {
+                      setNewTask('')
+                      setValidationMessage('')
+                    }}
                   >
-                    {item}
+                    Cancel
                   </button>
-                ))}
+                  <button className="primary-button" type="submit"><Icon name="plus" size={17} /><span>Add task</span></button>
+                </div>
+              </form>
+              <div className="filter-toolbar">
+                <span className="filter-caption"><Icon name="filter" size={16} /> Filter</span>
+                <div className="filters" aria-label="Filter tasks by status">
+                  {TASK_FILTERS.map(item => (
+                    <button
+                      key={item}
+                      type="button"
+                      className={filter === item ? 'filter active-filter' : 'filter'}
+                      aria-pressed={filter === item}
+                      onClick={() => {
+                        setFilter(item)
+                        setActiveSection('tasks')
+                      }}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+                {(filter !== 'All' || query) && (
+                  <button className="reset-filters" type="button" onClick={() => { setFilter('All'); setQuery('') }}>
+                    Clear filters
+                  </button>
+                )}
               </div>
             </div>
 
@@ -367,7 +546,7 @@ export default function App() {
                   ) : (
                     <>
                       <div className="task-info">
-                        <strong>{task.title}</strong>
+                        <strong title={task.title}>{task.title}</strong>
                         <span>TF-{task.id} <span className="meta-divider">·</span> {task.priority} priority</span>
                       </div>
                       <span className={`priority ${task.priority.toLowerCase()}`}>{task.priority}</span>
@@ -379,7 +558,7 @@ export default function App() {
                           aria-label={`Move ${task.title} from ${task.status} to the next status`}
                           title="Move to the next status"
                         >
-                          {task.status}
+                          <span>{task.status}</span><span className="status-chevron" aria-hidden="true">⌄</span>
                         </button>
                         <button className="icon-button" type="button" onClick={() => startEditing(task)} aria-label={`Edit ${task.title}`} title="Edit task">
                           <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">

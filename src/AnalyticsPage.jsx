@@ -69,7 +69,7 @@ export default function AnalyticsPage({ tasks, onOpenApp }) {
       <section className="welcome analytics-welcome">
         <div>
           <p className="eyebrow">WORKSPACE INSIGHTS</p>
-          <h1>Understand your workload.</h1>
+          <h2>Understand your workload.</h2>
           <p className="subtitle">A live snapshot calculated from the tasks in this browser.</p>
         </div>
         <button className="analytics-action" type="button" onClick={onOpenApp}>Manage tasks <span aria-hidden="true">→</span></button>
