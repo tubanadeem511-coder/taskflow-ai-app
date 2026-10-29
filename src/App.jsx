@@ -13,14 +13,9 @@ import {
 } from './taskUtils.js'
 import AnalyticsPage from './AnalyticsPage.jsx'
 import LandingPage from './LandingPage.jsx'
+import { getRoute } from './routes.js'
 
 const STORAGE_KEY = 'taskflow.tasks.v1'
-
-function getRoute() {
-  if (window.location.pathname === '/app') return 'app'
-  if (window.location.pathname === '/analytics') return 'analytics'
-  return 'landing'
-}
 
 function loadWorkspace() {
   try {
@@ -59,7 +54,7 @@ function loadWorkspace() {
 export default function App() {
   const [workspace] = useState(loadWorkspace)
   const [tasks, setTasks] = useState(workspace.tasks)
-  const [route, setRoute] = useState(getRoute)
+  const [route, setRoute] = useState(() => getRoute(window.location.pathname))
   const [hasTaskChanges, setHasTaskChanges] = useState(false)
   const [filter, setFilter] = useState('All')
   const [query, setQuery] = useState('')
@@ -73,7 +68,7 @@ export default function App() {
 
   useEffect(() => {
     function syncRoute() {
-      setRoute(getRoute())
+      setRoute(getRoute(window.location.pathname))
     }
 
     window.addEventListener('popstate', syncRoute)
