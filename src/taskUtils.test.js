@@ -12,11 +12,21 @@ import {
   validateTaskTitle,
 } from './taskUtils.js'
 
-test('rejects empty or non-string task titles', () => {
+test('rejects blank and whitespace-only task titles', () => {
+  assert.notEqual(validateTaskTitle(''), '')
   assert.notEqual(validateTaskTitle('   '), '')
+  assert.throws(() => createTask(INITIAL_TASKS, ''), /title before adding/)
+  assert.throws(() => createTask(INITIAL_TASKS, '   '), /title before adding/)
+})
+
+test('rejects non-string task titles', () => {
   assert.notEqual(validateTaskTitle(null), '')
+  assert.throws(() => createTask(INITIAL_TASKS, null), /title before adding/)
+})
+
+test('accepts a valid title and trims it when creating a task', () => {
   assert.equal(validateTaskTitle('Write tests'), '')
-  assert.throws(() => createTask(INITIAL_TASKS, '  '), /title before adding/)
+  assert.equal(createTask([], '  Write tests  ')[0].title, 'Write tests')
 })
 
 test('creates a trimmed pending task with a unique id without mutating tasks', () => {
@@ -46,9 +56,24 @@ test('updates and deletes tasks without mutating the original collection', () =>
 })
 
 test('filters tasks by status and case-insensitive title search', () => {
-  assert.equal(filterTasks(INITIAL_TASKS, 'Pending').length, 2)
+  assert.deepEqual(
+    filterTasks(INITIAL_TASKS, 'Pending').map(task => task.title),
+    ['Create reusable AI skill', 'Add automated tests'],
+  )
+  assert.deepEqual(
+    filterTasks(INITIAL_TASKS, 'In Progress').map(task => task.title),
+    ['Connect Jira and GitHub'],
+  )
+  assert.deepEqual(
+    filterTasks(INITIAL_TASKS, 'Completed').map(task => task.title),
+    ['Set up project structure'],
+  )
   assert.deepEqual(
     filterTasks(INITIAL_TASKS, 'All', 'JIRA').map(task => task.title),
+    ['Connect Jira and GitHub'],
+  )
+  assert.deepEqual(
+    filterTasks(INITIAL_TASKS, 'In Progress', 'JIRA').map(task => task.title),
     ['Connect Jira and GitHub'],
   )
   assert.equal(filterTasks(INITIAL_TASKS, 'Completed', 'missing').length, 0)

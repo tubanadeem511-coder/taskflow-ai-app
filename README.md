@@ -22,6 +22,14 @@ New browser profiles start with example tasks. Analytics describe the current li
 - npm
 - Node.js built-in test runner (`node --test`)
 
+## Project structure
+
+- `src/main.jsx` mounts the React app and imports the global stylesheet.
+- `src/App.jsx` contains the main app UI, navigation, task state, and local persistence.
+- `src/taskUtils.js` provides task validation, updates, search/filtering, statistics, and analytics calculations.
+- `src/AnalyticsPage.jsx` renders the task analytics view.
+- `src/routes.js` maps URL paths to the landing, task, and analytics views.
+
 ## Prerequisites
 
 - Node.js 20.19 or later in the 20.x line, or 22.12 or later.
