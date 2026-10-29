@@ -1,90 +1,92 @@
 # TaskFlow AI
 
-TaskFlow AI is a React task workspace with a public product landing page, a browser-local task manager, and a live snapshot of task status and priority. Its current tagline is **Manage Requests. Track Progress. Resolve Faster.** The current implementation is a frontend prototype; it is not yet a multi-organization service desk.
+TaskFlow AI is a lightweight task-management frontend for organizing a personal task list, tracking current progress, and reviewing a snapshot of task statistics. Tasks are stored in the browser; this project is a frontend prototype, not a hosted or multi-user task service.
 
-## Current features
+## Features
 
-- Public landing page at `/`.
-- Task workspace at `/app`: create, rename, delete, search, filter, and cycle task statuses.
-- Analytics at `/analytics`: current task totals, completion rate, status breakdown, priority mix, and a summary table.
-- Responsive layouts, keyboard focus styling, reduced-motion support, TaskFlow logo and favicon.
-- Task persistence in browser `localStorage` under `taskflow.tasks.v1`.
+- Create tasks with title validation; blank and whitespace-only titles are rejected.
+- Search task titles without regard to letter case.
+- Filter tasks by Pending, In Progress, or Completed status.
+- Advance a task through Pending → In Progress → Completed → Pending; edit or delete tasks.
+- View task counts and completion percentage.
+- Review current status and priority breakdowns, calculated from the task list.
+- Keep task changes in this browser's local storage (`taskflow.tasks.v1`).
 
-The starter tasks are example content shown to a new browser profile. Analytics are calculated from the current task list only. There are no historical timestamps, date filters, account identities, or remote records.
-
-## Roles and data boundaries
-
-The requested Owner, Admin/Manager, Agent, and Member roles are **not implemented**. There is no authentication or authorization, and localStorage is not a secure or shared database. Do not use the current build to store sensitive institute or company data.
+New browser profiles start with example tasks. Analytics describe the current list only; they are not historical reports.
 
 ## Technology
 
-- React 19
-- Vite 8
-- JavaScript ES modules
+- React 19 and React DOM
+- Vite 8 with the React plugin
+- JavaScript ES modules and CSS
 - npm
-- Node's built-in test runner (`node --test`)
+- Node.js built-in test runner (`node --test`)
 
-No Supabase, charting, AI-provider, or Jira/GitHub integration package is currently configured. No server/API is present.
+## Prerequisites
 
-## Prerequisites and local development
+- Node.js 20.19 or later in the 20.x line, or 22.12 or later.
+- npm (included with Node.js).
 
-Install a Node.js release supported by the installed Vite version and npm, then run:
+These versions meet the Node.js engine requirement of the Vite version used by this project.
+
+## Local setup
+
+From the project directory, install the exact dependency versions in `package-lock.json`:
 
 ```sh
 npm ci
+```
+
+## Development server
+
+Start Vite:
+
+```sh
 npm run dev
 ```
 
-Open the local URL printed by Vite. Existing routes use the browser History API; a static production host must rewrite `/app` and `/analytics` to `index.html` for direct navigation and refreshes.
+Open the local address printed in the terminal (Vite defaults to `http://localhost:5173/`).
 
-## Tests and production build
+## Tests
+
+Run the automated tests:
 
 ```sh
 npm test
+```
+
+The tests use Node's built-in test runner and cover task utilities and route resolution.
+
+## Production build
+
+Create the production bundle:
+
+```sh
 npm run build
+```
+
+Vite writes the output to `dist/`. To serve that build locally, run:
+
+```sh
 npm run preview
 ```
 
-The build output is written to `dist/`. Deploy that directory to a static host configured with SPA history fallback.
+Deployments that serve the app from a static host should configure SPA history fallback to `index.html` so direct navigation and refreshes on app routes work.
 
-## Supabase status and planned setup
+## Routes
 
-There is currently no Supabase project configuration, client, migration, schema, Storage bucket, Auth flow, or RLS policy in this repository. No existing Supabase tables or data were discovered in the project files. A live Supabase project and its schema could not be inspected from this workspace.
+- `/` — public landing page
+- `/app` — task workspace
+- `/analytics` — task analytics
 
-`.env.example` lists public client variable names with placeholders for future setup; these variables are not consumed by the current application. To proceed with the multi-organization implementation:
+Both `/app` and `/app/` open the task workspace; both `/analytics` and `/analytics/` open analytics. This trailing-slash behavior was fixed in KAN-4 and is covered by the route tests.
 
-1. Create or identify a Supabase project and confirm that it is the intended target. Do not provide a service-role key to the browser or commit credentials.
-2. Review the existing project's tables, Auth configuration, and Storage buckets before preparing additive migrations. Back up existing data and use a non-production project for policy tests.
-3. Add database migrations for profiles, organizations, memberships, projects, requests, tasks, comments/history, and notifications. Use RLS on every exposed table; derive permissions from authenticated membership, not frontend role state.
-4. Add Supabase Auth and a data-access layer, then migrate existing local tasks only through an explicit, user-controlled import.
-5. Configure a private attachment bucket and policies, upload constraints, and short-lived signed downloads.
-6. Test tenant isolation and denied cross-organization reads/writes against the safe Supabase test project before deploying.
+## Integrations and limitations
 
-The current frontend has no trusted server or edge function. Never put a Supabase service-role key or AI provider secret in a `VITE_*` variable. Inviting users through Supabase Admin APIs, secure AI calls, and other privileged operations require a separately deployed server or edge function.
+- **Jira and GitHub:** The coding-agent workspace has Atlassian MCP tools for Jira and GitHub MCP tools for repository workflows. These are external development tools, not application integrations. The frontend has no Jira or GitHub client, API connection, or synchronization; a sample task mentioning these services is example content only.
+- **MCP:** MCP tool access is configured in the agent environment, not bundled or configured by this application. The app does not connect to an MCP server.
+- **Data and accounts:** There is no backend, database, authentication, account, organization, or cloud sync. Task data stays in browser local storage and is not shared across browsers or devices.
+- **Analytics:** Statistics are derived from the current task list. There is no activity history, date-range reporting, or historical trend data.
+- **Other integrations:** No AI provider or Supabase integration is implemented.
 
-## AI assistance
-
-No model integration is implemented. No request or organization data is sent to an AI provider. AI suggestions remain unavailable until a server-side provider integration, privacy policy, access controls, and provider credentials are configured.
-
-## Jira, GitHub, and coding-agent workflow
-
-The project folder was reported by the workspace environment as not being a Git repository; no commit or push can be made from that state. No Jira MCP integration or Jira project was available in the active tool configuration, so Jira tasks, issue links, and a real Jira-to-code demonstration have not been created. GitHub/MCP availability and repository authorization must be confirmed before linking or publishing code.
-
-The reusable workspace Skill is at [`.github/skills/safe-taskflow-development/SKILL.md`](.github/skills/safe-taskflow-development/SKILL.md). It documents the inspect/reproduce/focus/test/security-review workflow. The Skill file itself is a project customization; confirm the selected coding agent loads workspace skills before relying on automatic invocation.
-
-## Deployment and security notes
-
-- Deploy `dist/` to a static host with SPA fallback and HTTPS.
-- Browser-local task data is isolated by browser profile and origin, can be removed by the user, and is not encrypted or backed up by this app.
-- Do not enter private, regulated, or organization-confidential data into the current frontend.
-- Before offering this as a multi-tenant production service, implement and independently test authentication, server-enforced authorization, RLS, private Storage, audit history, backups, and operational monitoring.
-
-## Known limitations
-
-- No signup, login, password recovery, profiles, organizations, invitations, or organization switching.
-- No request/complaint workflow, comments, assignment, attachments, or status history.
-- No projects, membership, subtasks, or Kanban board.
-- No role-specific dashboards, notifications, or server/database analytics.
-- No date-range or historical charts, CSV export, or AI assistance.
-- No configured Supabase, email, AI, Jira, or GitHub integration.
-- No Git checkpoint can be created until the project is in an authorized repository.
+Do not use the current prototype to store sensitive or organization-confidential data.
